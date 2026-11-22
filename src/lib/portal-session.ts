@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { randomToken, sha256, HttpError } from "@/lib/security";
-import type { WbTokens } from "@/lib/wb-auth";
+import { rotateRefreshToken, verifyAccessToken, type WbTokens } from "@/lib/wb-auth";
 
 export const PORTAL_COOKIE = "wb_docs_session";
 const key = () => createHash("sha256").update(`${env().SESSION_SECRET}:tokens`).digest();
@@ -23,8 +23,20 @@ export async function requirePortalSession(request: NextRequest) {
 }
 
 export async function portalContext(token: string) {
-  const session = await db.portalSession.findUnique({ where: { tokenHash: sha256(token) } });
+  let session = await db.portalSession.findUnique({ where: { tokenHash: sha256(token) } });
   if (!session || session.expiresAt <= new Date()) throw new HttpError(401, "SESSION_EXPIRED", "Sesja wygasła.");
+  if (session.accessTokenExpiresAt.getTime() <= Date.now() + 60_000) {
+    session = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`portal:${session!.id}`})) IS NULL AS acquired`;
+      const current = await tx.portalSession.findUnique({ where: { id: session!.id } });
+      if (!current || current.expiresAt <= new Date()) throw new HttpError(401, "SESSION_EXPIRED", "Sesja wygasła.");
+      if (current.accessTokenExpiresAt.getTime() > Date.now() + 60_000) return current;
+      if (!current.refreshTokenEncrypted) throw new HttpError(401, "SESSION_EXPIRED", "Sesja WB Auth wygasła.");
+      const tokens = await rotateRefreshToken(decrypt(current.refreshTokenEncrypted)); const claims = await verifyAccessToken(tokens.access_token);
+      if (claims.sub !== current.wbAuthUserId || claims.sid !== current.wbAuthSessionId || claims.tid !== current.tenantId) throw new HttpError(401, "SESSION_MISMATCH", "Odświeżona sesja jest niespójna.");
+      return tx.portalSession.update({ where: { id: current.id }, data: { accessTokenEncrypted: encrypt(tokens.access_token), refreshTokenEncrypted: tokens.refresh_token ? encrypt(tokens.refresh_token) : current.refreshTokenEncrypted, accessTokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000) } });
+    });
+  }
   const membership = await db.applicationMembership.findUnique({ where: { wbAuthUserId_tenantId: { wbAuthUserId: session.wbAuthUserId, tenantId: session.tenantId } }, include: { permissions: true, entities: true } });
   if (!membership || membership.status !== "ACTIVE") throw new HttpError(403, "ACCESS_REVOKED", "Brak aktywnego dostępu do WB Dokumenty.");
   return { session, membership, accessToken: decrypt(session.accessTokenEncrypted), permissions: new Set(membership.permissions.map((item) => item.permission)), entityIds: new Set(membership.entities.map((item) => item.entityId)) };

@@ -32,6 +32,14 @@ export async function exchangeCode(code: string, verifier: string) {
   return tokenSchema.parse(await response.json());
 }
 
+export async function rotateRefreshToken(refreshToken: string) {
+  const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: env().WB_AUTH_CLIENT_ID });
+  if (env().WB_AUTH_CLIENT_SECRET) body.set("client_secret", env().WB_AUTH_CLIENT_SECRET);
+  const response = await authFetch("/api/oauth/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+  if (!response.ok) throw new HttpError(401, "SESSION_REFRESH_FAILED", "Sesja WB Auth wygasła.");
+  return tokenSchema.parse(await response.json());
+}
+
 let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 export async function verifyAccessToken(token: string) {
   jwks ??= createRemoteJWKSet(new URL("/.well-known/jwks.json", env().WB_AUTH_ISSUER));
