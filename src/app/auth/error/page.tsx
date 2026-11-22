@@ -1,0 +1,3 @@
+import Link from "next/link";
+
+export default async function AuthError({ searchParams }: { searchParams: Promise<{ code?: string }> }) { const { code } = await searchParams; return <main className="grid min-h-screen place-items-center p-6"><section className="card max-w-lg p-8"><div className="brand-mark">WB</div><h1 className="mt-6 text-2xl font-semibold">Nie udało się zalogować</h1><p className="mt-3 text-slate-400">WB Auth nie potwierdził dostępu do aplikacji. Skontaktuj się z administratorem, jeśli dostęp powinien być aktywny.</p><p className="mt-3 text-xs text-slate-600">Kod: {code ?? "unknown"}</p><Link className="button-primary mt-6 w-full" href="/api/auth/login">Spróbuj ponownie</Link></section></main>; }
