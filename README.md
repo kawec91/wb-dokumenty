@@ -12,6 +12,7 @@ Mobilna aplikacja do przekazywania dokumentów księgowych WhiteBull. Pracownik 
 - zapis bez nadpisywania w `Księgowość/{folder}/{rok}/{miesiąc}` według czasu `Europe/Warsaw`;
 - niezależna, transakcyjna numeracja podmiotu i roku;
 - statusy i append-only `DocumentEvent`;
+- historia własnych zgłoszeń dla użytkownika WB Auth powiązanego z pracownikiem przez jego UUID;
 - OAuth Authorization Code + PKCE z WB Auth oraz lokalne, backendowe uprawnienia domenowe i zakresy `entityId`;
 - panel dokumentów, pracowników, QR, podmiotów, dostępu oraz eksport ZIP z manifestem CSV;
 - wskaźnik 5 GB, ostrzeżenie od 80% i odmowa zapisu po przekroczeniu limitu.

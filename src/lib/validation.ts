@@ -27,5 +27,6 @@ export const employeeInputSchema = z.object({
   firstName: z.string().trim().min(1).max(100),
   lastName: z.string().trim().min(1).max(100),
   phoneNumber: z.string().transform(normalizePhone),
+  wbAuthUserId: z.string().uuid().optional().nullable(),
   entityIds: z.array(z.string().uuid()).min(1),
 });

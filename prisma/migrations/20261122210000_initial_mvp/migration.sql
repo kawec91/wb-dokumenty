@@ -53,6 +53,7 @@ CREATE TABLE "Employee" (
     "firstName" VARCHAR(100) NOT NULL,
     "lastName" VARCHAR(100) NOT NULL,
     "phoneNumber" VARCHAR(20) NOT NULL,
+    "wbAuthUserId" UUID,
     "status" "EmployeeStatus" NOT NULL DEFAULT 'ACTIVE',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -279,6 +280,9 @@ CREATE UNIQUE INDEX "Entity_numberingPrefix_key" ON "Entity"("numberingPrefix");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Employee_phoneNumber_key" ON "Employee"("phoneNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Employee_wbAuthUserId_key" ON "Employee"("wbAuthUserId");
 
 -- CreateIndex
 CREATE INDEX "Employee_status_idx" ON "Employee"("status");

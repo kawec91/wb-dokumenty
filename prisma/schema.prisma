@@ -102,6 +102,7 @@ model Employee {
   firstName      String           @db.VarChar(100)
   lastName       String           @db.VarChar(100)
   phoneNumber    String           @unique @db.VarChar(20)
+  wbAuthUserId   String?          @unique @db.Uuid
   status         EmployeeStatus   @default(ACTIVE)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
