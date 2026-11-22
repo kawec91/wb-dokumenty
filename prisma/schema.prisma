@@ -1,0 +1,344 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum QrCodeType {
+  PERSONAL
+  GENERAL
+}
+
+enum DocumentCategory {
+  FAKTURA
+  RACHUNEK
+  PARAGON_Z_NIP
+  INNE
+}
+
+enum DocumentStatus {
+  ZAPISANY
+  PRZEKAZANY
+  PRZYJETY
+  DO_POPRAWY
+  ARCHIWALNY
+}
+
+enum PermissionCode {
+  DOCUMENT_UPLOAD
+  DOCUMENT_VIEW_OWN
+  DOCUMENT_VIEW_ALL
+  DOCUMENT_DOWNLOAD
+  DOCUMENT_STATUS_MANAGE
+  DOCUMENT_EXPORT
+  EMPLOYEE_MANAGE
+  QR_MANAGE
+  ENTITY_MANAGE
+  ACCESS_MANAGE
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  REVOKED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+  FAILED
+}
+
+enum ExportStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum ActorType {
+  EMPLOYEE
+  USER
+  SYSTEM
+}
+
+enum AttemptResult {
+  PENDING
+  SUCCESS
+  REJECTED
+  BLOCKED
+  ERROR
+}
+
+model Entity {
+  id                String             @id @default(uuid()) @db.Uuid
+  code              String             @unique @db.VarChar(40)
+  displayName       String             @db.VarChar(120)
+  legalName         String             @db.VarChar(200)
+  storageFolderName String             @unique @db.VarChar(120)
+  numberingPrefix   String             @unique @db.VarChar(8)
+  taxId             String?            @db.VarChar(20)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  employees         EmployeeEntity[]
+  documents         Document[]
+  memberships       MembershipEntity[]
+  sequences         DocumentSequence[]
+  exports           AccountingExport[]
+}
+
+model Employee {
+  id             String           @id @default(uuid()) @db.Uuid
+  firstName      String           @db.VarChar(100)
+  lastName       String           @db.VarChar(100)
+  phoneNumber    String           @unique @db.VarChar(20)
+  status         EmployeeStatus   @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  entities       EmployeeEntity[]
+  qrCodes        QrCode[]
+  documents      Document[]
+  deviceSessions DeviceSession[]
+  uploadAttempts UploadAttempt[]
+
+  @@index([status])
+}
+
+model EmployeeEntity {
+  employeeId String   @db.Uuid
+  entityId   String   @db.Uuid
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  entity     Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, entityId])
+  @@index([entityId])
+}
+
+model QrCode {
+  id             String          @id @default(uuid()) @db.Uuid
+  type           QrCodeType
+  name           String          @db.VarChar(120)
+  description    String?         @db.VarChar(500)
+  tokenHash      String          @unique @db.Char(64)
+  tokenEncrypted String          @db.Text
+  employeeId     String?         @db.Uuid
+  employee       Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  isActive       Boolean         @default(true)
+  usageCount     Int             @default(0)
+  lastUsedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  documents      Document[]
+  deviceSessions DeviceSession[]
+
+  @@index([employeeId, isActive])
+}
+
+model Document {
+  id               String           @id @default(uuid()) @db.Uuid
+  referenceNumber  String           @unique @db.VarChar(32)
+  entityId         String           @db.Uuid
+  employeeId       String           @db.Uuid
+  qrCodeId         String?          @db.Uuid
+  category         DocumentCategory
+  status           DocumentStatus   @default(ZAPISANY)
+  note             String?          @db.VarChar(1000)
+  receivedAt       DateTime         @default(now())
+  storageYear      Int
+  storageMonth     Int
+  receiptTokenHash String           @unique @db.Char(64)
+  entity           Entity           @relation(fields: [entityId], references: [id], onDelete: Restrict)
+  employee         Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  qrCode           QrCode?          @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+  files            DocumentFile[]
+  events           DocumentEvent[]
+  uploadAttempts   UploadAttempt[]
+
+  @@index([entityId, receivedAt])
+  @@index([employeeId, receivedAt])
+  @@index([status, receivedAt])
+}
+
+model DocumentFile {
+  id           String   @id @default(uuid()) @db.Uuid
+  documentId   String   @db.Uuid
+  sequence     Int
+  originalName String   @db.VarChar(255)
+  storedName   String   @unique @db.VarChar(255)
+  relativePath String   @unique @db.VarChar(500)
+  mimeType     String   @db.VarChar(100)
+  sizeBytes    Int
+  sha256       String   @db.Char(64)
+  createdAt    DateTime @default(now())
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, sequence])
+}
+
+model DocumentEvent {
+  id         String          @id @default(uuid()) @db.Uuid
+  documentId String          @db.Uuid
+  oldStatus  DocumentStatus?
+  newStatus  DocumentStatus
+  actorType  ActorType
+  actorId    String?
+  note       String?         @db.VarChar(1000)
+  createdAt  DateTime        @default(now())
+  document   Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, createdAt])
+}
+
+model UploadAttempt {
+  id             String        @id @default(uuid()) @db.Uuid
+  ipHash         String        @db.Char(64)
+  clientHash     String        @db.Char(64)
+  employeeId     String?       @db.Uuid
+  result         AttemptResult
+  documentId     String?       @db.Uuid
+  idempotencyKey String?       @db.VarChar(100)
+  createdAt      DateTime      @default(now())
+  employee       Employee?     @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  document       Document?     @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@unique([clientHash, idempotencyKey])
+  @@index([ipHash, clientHash, createdAt])
+  @@index([employeeId, result, createdAt])
+}
+
+model RateLimitState {
+  scope        String    @db.VarChar(30)
+  subjectHash  String    @db.Char(64)
+  windowStart  DateTime
+  count        Int       @default(0)
+  blockedUntil DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@id([scope, subjectHash])
+}
+
+model ApplicationMembership {
+  id           String                  @id @default(uuid()) @db.Uuid
+  wbAuthUserId String                  @db.Uuid
+  tenantId     String                  @db.Uuid
+  email        String                  @db.VarChar(320)
+  displayName  String?                 @db.VarChar(200)
+  roleTemplate String?                 @db.VarChar(30)
+  status       MembershipStatus        @default(INVITED)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  permissions  MembershipPermission[]
+  entities     MembershipEntity[]
+  invitations  ApplicationInvitation[]
+  exports      AccountingExport[]
+
+  @@unique([wbAuthUserId, tenantId])
+  @@index([tenantId, status])
+}
+
+model ApplicationInvitation {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  membershipId       String?                @db.Uuid
+  wbAuthInviteId     String?                @unique @db.Uuid
+  tenantId           String                 @db.Uuid
+  email              String                 @db.VarChar(320)
+  roleTemplate       String?                @db.VarChar(30)
+  plannedPermissions PermissionCode[]
+  plannedEntityIds   String[]               @db.Uuid
+  status             InvitationStatus       @default(PENDING)
+  expiresAt          DateTime?
+  lastError          String?                @db.VarChar(500)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  membership         ApplicationMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+}
+
+model MembershipPermission {
+  membershipId String                @db.Uuid
+  permission   PermissionCode
+  membership   ApplicationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, permission])
+}
+
+model MembershipEntity {
+  membershipId String                @db.Uuid
+  entityId     String                @db.Uuid
+  membership   ApplicationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  entity       Entity                @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, entityId])
+  @@index([entityId])
+}
+
+model AccountingExport {
+  id            String                @id @default(uuid()) @db.Uuid
+  requestedById String                @db.Uuid
+  entityId      String?               @db.Uuid
+  year          Int
+  month         Int?
+  status        ExportStatus          @default(PROCESSING)
+  relativePath  String?               @db.VarChar(500)
+  fileCount     Int                   @default(0)
+  sizeBytes     BigInt                @default(0)
+  error         String?               @db.VarChar(500)
+  createdAt     DateTime              @default(now())
+  completedAt   DateTime?
+  requestedBy   ApplicationMembership @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  entity        Entity?               @relation(fields: [entityId], references: [id], onDelete: Restrict)
+
+  @@index([requestedById, createdAt])
+}
+
+model DeviceSession {
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique @db.Char(64)
+  employeeId String   @db.Uuid
+  qrCodeId   String?  @db.Uuid
+  ipHash     String   @db.Char(64)
+  clientHash String   @db.Char(64)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  qrCode     QrCode?  @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, expiresAt])
+}
+
+model DocumentSequence {
+  entityId  String @db.Uuid
+  year      Int
+  lastValue Int    @default(0)
+  entity    Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@id([entityId, year])
+}
+
+model PortalSession {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tokenHash             String   @unique @db.Char(64)
+  wbAuthSessionId       String   @db.Uuid
+  wbAuthUserId          String   @db.Uuid
+  tenantId              String   @db.Uuid
+  accessTokenEncrypted  String   @db.Text
+  refreshTokenEncrypted String?  @db.Text
+  accessTokenExpiresAt  DateTime
+  expiresAt             DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([wbAuthUserId, tenantId])
+  @@index([expiresAt])
+}
