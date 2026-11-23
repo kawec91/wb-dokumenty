@@ -39,6 +39,7 @@ npm run bootstrap:admin -- <WB_AUTH_USER_UUID> <TENANT_UUID> <EMAIL>
 ```
 
 Bootstrap nie tworzy konta ani hasła. Użytkownik musi już mieć aktywne członkostwo tenanta oraz dostęp do klienta `wb-dokumenty` w WB Auth.
+`WB_AUTH_USER_UUID` to UUID użytkownika z WB Auth (`User.id`, czyli claim `sub` w jego tokenie), a `TENANT_UUID` to UUID istniejącego tenanta WhiteBull ustawiony jako `WB_AUTH_TENANT_ID`. Skrypt nie odpytuje ani nie modyfikuje WB Auth. W jednej transakcji uzgadnia lokalny membership `ACTIVE`, rolę `ADMIN`, pełny zestaw uprawnień administratora i dostęp dokładnie do seedowanych podmiotów `TORUN`, `GDANSK`, `BYDGOSZCZ` oraz `TRADE`. Ponowne uruchomienie z tymi samymi argumentami odtwarza ten sam stan bez tworzenia drugiego membershipu.
 
 ## Zmienne środowiskowe
 
@@ -80,10 +81,19 @@ Nie ma lokalnych haseł. Cofnięcie dostępu w panelu usuwa lokalne sesje i wył
 3. Ustaw wszystkie ENV z tabeli. Wygeneruj niezależne sekrety poleceniem narzędzia do sekretów, bez wypisywania ich do logów wdrożenia.
 4. Przed montowaniem sprawdź w Coolify rzeczywisty mount usługi `wb-drive`. Potwierdź host path lub nazwany wolumen i katalog zawierający `Księgowość`.
 5. Zamontuj wyłącznie właściwy fragment współdzielonego storage do ścieżki zgodnej z `STORAGE_ROOT`, z prawem zapisu UID/GID kontenera aplikacji. Nie używaj hasła administratora FileBrowsera.
-6. W terminalu nowej aplikacji uruchom `npx prisma migrate deploy`, `npm run db:seed`, a następnie jednorazowy `bootstrap:admin`.
-7. Dodaj pracownika, przypisz podmiot, wygeneruj testowy GENERAL QR i prześlij mały PDF.
-8. Sprawdź plik na Drive, rekord i SHA-256 w panelu, następnie pobranie przez konto księgowości i zmianę statusu na `PRZYJETY`.
-9. Sprawdź `/api/health` w healthchecku Coolify.
+6. Po wdrożeniu nowego obrazu otwórz Terminal aplikacji w Coolify i sprawdź dostępność narzędzi: `test -f /app/scripts/bootstrap-admin.ts && npx --no-install prisma --version >/dev/null && npx --no-install tsx --version >/dev/null`. Następnie uruchom `npm run db:migrate` i `npm run db:seed`.
+7. Odczytaj UUID użytkownika z rekordu użytkownika w WB Auth lub claimu `sub`, a UUID tenanta WhiteBull z `WB_AUTH_TENANT_ID`. W tej samej sesji terminala uruchom:
+
+   ```sh
+   WB_AUTH_USER_UUID='00000000-0000-4000-8000-000000000000'
+   ADMIN_EMAIL='admin@whitebull.com.pl'
+   npm run bootstrap:admin -- "$WB_AUTH_USER_UUID" "$WB_AUTH_TENANT_ID" "$ADMIN_EMAIL"
+   ```
+
+   Zastąp przykładowy UUID i e-mail prawdziwymi wartościami. Oczekiwany komunikat końcowy to `Aktywowano administratora ... dla 4 podmiotów.`. Komendę można bezpiecznie powtórzyć po przerwanym terminalu; bootstrap nie jest częścią `CMD` ani skryptu startowego kontenera.
+8. Dodaj pracownika, przypisz podmiot, wygeneruj testowy GENERAL QR i prześlij mały PDF.
+9. Sprawdź plik na Drive, rekord i SHA-256 w panelu, następnie pobranie przez konto księgowości i zmianę statusu na `PRZYJETY`.
+10. Sprawdź `/api/health` w healthchecku Coolify.
 
 Mount produkcyjny nie jest zapisany w repozytorium, ponieważ jego nazwa i ścieżka muszą zostać potwierdzone na serwerze. Bez tego test połączenia z WhiteBull Drive pozostaje niewykonany.
 
