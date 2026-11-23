@@ -1,0 +1,3 @@
+"use client";
+import { Icon } from "@/components/ui/icons";
+export default function AdminError({reset}:{error:Error&{digest?:string};reset:()=>void}){return <div className="card grid min-h-[420px] place-items-center p-8 text-center"><div><span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-rose-400/10 text-rose-300"><Icon name="warning"/></span><h1 className="mt-5 text-xl font-bold">Nie udało się załadować widoku</h1><p className="mt-2 max-w-md text-sm leading-6 text-slate-400">Spróbuj ponownie. Jeśli problem wróci, sprawdź logi aplikacji i połączenie z bazą danych.</p><button className="button-primary mt-6" onClick={reset}>Spróbuj ponownie</button></div></div>}
